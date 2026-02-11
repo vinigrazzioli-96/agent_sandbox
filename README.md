@@ -44,7 +44,7 @@ Preencha `.env`:
 - `OLLAMA_MODEL`
 - `DAYTONA_API_KEY`
 - `DAYTONA_API_URL` (recomendado: `https://app.daytona.io/api`)
-- `DAYTONA_TARGET` (recomendado definir explicitamente)
+- `DAYTONA_TARGET` (opcional; use só se quiser fixar uma região/target)
 - `DAYTONA_SANDBOX_IMAGE`
 
 Instalar dependências:
@@ -69,6 +69,37 @@ Abra:
 - `http://localhost:8000`
 
 ---
+
+## DeepAgent oficial (LangChain + Daytona)
+
+Você está certo: o caminho oficial é exatamente esse padrão:
+
+```python
+from daytona import Daytona
+from deepagents import create_deep_agent
+from langchain_daytona import DaytonaSandbox
+from langchain_ollama import ChatOllama
+
+sandbox = Daytona().create()
+backend = DaytonaSandbox(sandbox=sandbox)
+
+agent = create_deep_agent(
+    model=ChatOllama(model="gemma3", base_url="http://localhost:11434"),
+    system_prompt="You are a coding assistant with sandbox access.",
+    backend=backend,
+)
+
+result = agent.invoke(
+    {
+        "messages": [
+            {"role": "user", "content": "Create a hello world Python script and run it"}
+        ]
+    }
+)
+```
+
+O backend deste projeto agora **tenta usar esse fluxo oficial automaticamente**.
+Se os pacotes `deepagents` e `langchain-daytona` não estiverem disponíveis no ambiente (comum em Python < 3.11), ele cai para o modo fallback.
 
 ## 3) Como usar (fluxo real)
 
@@ -161,3 +192,9 @@ requirements.txt   # dependências
 - normalmente indica endpoint incorreto
 - use `DAYTONA_API_URL=https://app.daytona.io/api`
 - não use apenas `https://app.daytona.io`
+
+
+### O que é DAYTONA_TARGET?
+- Não é obrigatório.
+- É apenas para forçar execução em um target/região específico.
+- Se não definir, o Daytona usa o default da sua organização.

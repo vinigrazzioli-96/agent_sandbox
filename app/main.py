@@ -55,6 +55,8 @@ class RuntimeState:
     preview_url: Optional[str] = None
     vnc_status: Optional[Dict[str, Any]] = None
     vnc_enabled: bool = False
+    deep_agent: Any = None
+    deepagent_status: str = "disabled"
 
 
 state = RuntimeState()
@@ -144,6 +146,54 @@ def _explain_daytona_error(exc: Exception) -> str:
     if "unauthorized" in lowered or "401" in lowered:
         return "Falha de autenticação Daytona. Verifique DAYTONA_API_KEY e permissões."
     return message
+
+
+def _try_build_deep_agent(sandbox: Any) -> tuple[Optional[Any], str]:
+    try:
+        from deepagents import create_deep_agent
+        from langchain_daytona import DaytonaSandbox
+        from langchain_ollama import ChatOllama
+    except ImportError:
+        return (
+            None,
+            "Pacotes deepagents/langchain-daytona/langchain-ollama não instalados (ou Python < 3.11).",
+        )
+
+    try:
+        backend = DaytonaSandbox(sandbox=sandbox)
+        llm = ChatOllama(
+            model=_require_env("OLLAMA_MODEL"),
+            base_url=_require_env("OLLAMA_BASE_URL"),
+        )
+        system_prompt = os.getenv(
+            "AGENT_SYSTEM_PROMPT",
+            "You are a coding assistant with sandbox access.",
+        )
+        agent = create_deep_agent(
+            model=llm,
+            system_prompt=system_prompt,
+            backend=backend,
+        )
+        return agent, "enabled"
+    except Exception as exc:
+        return None, f"erro ao iniciar deepagent: {exc}"
+
+
+def _extract_deepagent_text(result: Any) -> str:
+    if isinstance(result, str):
+        return result
+    if isinstance(result, dict):
+        messages = result.get("messages")
+        if isinstance(messages, list) and messages:
+            last = messages[-1]
+            if isinstance(last, dict):
+                content = last.get("content")
+                if isinstance(content, str):
+                    return content
+        return json.dumps(result, ensure_ascii=False)
+    return str(result)
+
+
 def _create_daytona_backend() -> None:
     global state
     try:
@@ -179,6 +229,7 @@ def _create_daytona_backend() -> None:
     state.sandbox_raw = sandbox
     state.backend = backend
     state.sandbox_id = str(sandbox_id)
+    state.deep_agent, state.deepagent_status = _try_build_deep_agent(sandbox)
 
 
 def _get_preview_link(port: int) -> Optional[str]:
@@ -282,6 +333,7 @@ async def session_info() -> Dict[str, Any]:
         "preview_url": state.preview_url,
         "vnc_enabled": state.vnc_enabled,
         "vnc_status": state.vnc_status,
+        "deepagent_status": state.deepagent_status,
         "messages": state.messages[-20:],
     }
 
@@ -309,6 +361,31 @@ async def chat(payload: ChatRequest) -> Dict[str, Any]:
     async with state_lock:
         if state.backend is None:
             raise HTTPException(status_code=400, detail="Inicie a sessão primeiro")
+
+        if state.deep_agent is not None:
+            try:
+                result = state.deep_agent.invoke(
+                    {
+                        "messages": [
+                            {"role": "user", "content": payload.message},
+                        ]
+                    }
+                )
+            except Exception as exc:
+                raise HTTPException(status_code=500, detail=f"Falha no deepagent: {exc}") from exc
+
+            summary = _extract_deepagent_text(result)
+            state.messages.append({"role": "user", "content": payload.message})
+            state.messages.append({"role": "assistant", "content": summary})
+            return {
+                "ok": True,
+                "summary": summary,
+                "mode": "deepagents",
+                "deepagent_status": state.deepagent_status,
+                "result": result,
+                "preview_url": state.preview_url,
+                "sandbox_id": state.sandbox_id,
+            }
 
         try:
             plan = _call_ollama_json(payload.message)
@@ -339,6 +416,8 @@ async def chat(payload: ChatRequest) -> Dict[str, Any]:
         return {
             "ok": True,
             "summary": assistant_summary,
+            "mode": "fallback_planner",
+            "deepagent_status": state.deepagent_status,
             "plan": plan,
             "command_results": command_results,
             "preview_url": preview_url,
@@ -356,5 +435,7 @@ async def stop_session() -> Dict[str, Any]:
         state.preview_url = None
         state.vnc_status = None
         state.vnc_enabled = False
+        state.deep_agent = None
+        state.deepagent_status = "disabled"
         state.messages.clear()
         return {"ok": True}
