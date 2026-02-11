@@ -118,22 +118,58 @@ def _mask_secrets(text: str) -> str:
     return re.sub(r"(sk-[A-Za-z0-9_-]{8,})", "***SECRET***", text)
 
 
+
+
+def _normalize_daytona_api_url(raw: Optional[str]) -> Optional[str]:
+    if not raw:
+        return None
+    value = raw.strip().rstrip("/")
+    if value == "https://app.daytona.io":
+        return "https://app.daytona.io/api"
+    if value.endswith(".io") and not value.endswith("/api"):
+        if "daytona" in value:
+            return f"{value}/api"
+    return value
+
+
+def _explain_daytona_error(exc: Exception) -> str:
+    message = str(exc)
+    lowered = message.lower()
+    if "403" in lowered and "cloudfront" in lowered:
+        return (
+            "Falha ao criar sandbox por endpoint Daytona incorreto (CloudFront 403). "
+            "Use DAYTONA_API_URL=https://app.daytona.io/api (não use apenas app.daytona.io) "
+            "e valide DAYTONA_API_KEY."
+        )
+    if "unauthorized" in lowered or "401" in lowered:
+        return "Falha de autenticação Daytona. Verifique DAYTONA_API_KEY e permissões."
+    return message
 def _create_daytona_backend() -> None:
     global state
     try:
-        from daytona import Daytona
+        from daytona import Daytona, DaytonaConfig
     except ImportError as exc:
         raise RuntimeError(
             "Dependências ausentes. Rode: pip install -r requirements.txt"
         ) from exc
 
-    daytona = Daytona()
+    api_key = _require_env("DAYTONA_API_KEY")
+    raw_api_url = os.getenv("DAYTONA_API_URL") or os.getenv("DAYTONA_SERVER_URL")
+    api_url = _normalize_daytona_api_url(raw_api_url)
+    target = os.getenv("DAYTONA_TARGET")
+
+    config = DaytonaConfig(api_key=api_key, api_url=api_url, target=target)
+    daytona = Daytona(config=config)
     create_kwargs: Dict[str, Any] = {}
     image = os.getenv("DAYTONA_SANDBOX_IMAGE")
     if image and image != "default":
         create_kwargs["image"] = image
 
-    sandbox = daytona.create(**create_kwargs)
+    try:
+        sandbox = daytona.create(**create_kwargs)
+    except Exception as exc:
+        raise RuntimeError(_explain_daytona_error(exc)) from exc
+
     backend = sandbox
 
     sandbox_id = getattr(sandbox, "id", None) or getattr(sandbox, "sandbox_id", None)

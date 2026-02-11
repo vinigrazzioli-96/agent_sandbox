@@ -43,8 +43,8 @@ Preencha `.env`:
 - `OLLAMA_BASE_URL`
 - `OLLAMA_MODEL`
 - `DAYTONA_API_KEY`
-- `DAYTONA_SERVER_URL`
-- `DAYTONA_TARGET`
+- `DAYTONA_API_URL` (recomendado: `https://app.daytona.io/api`)
+- `DAYTONA_TARGET` (recomendado definir explicitamente)
 - `DAYTONA_SANDBOX_IMAGE`
 
 Instalar dependências:
@@ -135,7 +135,7 @@ requirements.txt   # dependências
 ## 8) Troubleshooting
 
 ### Erro ao iniciar sessão
-- confira `DAYTONA_API_KEY`, `DAYTONA_SERVER_URL`, `DAYTONA_TARGET`
+- confira `DAYTONA_API_KEY`, `DAYTONA_API_URL` (recomendado: `https://app.daytona.io/api`) e `DAYTONA_TARGET`
 - confirme que a conta/target está ativo
 
 ### Erro no Ollama
@@ -155,3 +155,9 @@ requirements.txt   # dependências
 - fila assíncrona de jobs
 - persistência de histórico em banco
 - política de comandos permitidos (allowlist)
+
+
+### Erro CloudFront 403 ao iniciar sessão
+- normalmente indica endpoint incorreto
+- use `DAYTONA_API_URL=https://app.daytona.io/api`
+- não use apenas `https://app.daytona.io`
