@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Deep Sandbox Agent</title>
+    <link rel="stylesheet" href="/web/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Deep Sandbox Agent</h1>
+      <p>Chat + Sandbox Preview (estilo Manus/Kimi)</p>
+    </header>
+
+    <main>
+      <section class="left">
+        <div class="controls">
+          <button id="startBtn">Iniciar sessão</button>
+          <button id="stopBtn">Parar sessão</button>
+          <button id="refreshBtn">Atualizar status</button>
+        </div>
+
+        <div class="status" id="status">Status: aguardando</div>
+
+        <div class="chat" id="chatLog"></div>
+
+        <form id="chatForm">
+          <textarea id="message" rows="4" placeholder="Peça para criar um app React/Java e subir em porta 3000"></textarea>
+          <button type="submit">Enviar para o agente</button>
+        </form>
+      </section>
+
+      <section class="right">
+        <div class="embed-controls">
+          <input id="previewPort" type="number" value="3000" min="1" max="65535" />
+          <button id="previewBtn">Gerar preview URL</button>
+        </div>
+
+        <div class="embed-controls">
+          <input id="manualUrl" type="url" placeholder="Cole uma URL de preview/VNC para embed manual" />
+          <button id="manualBtn">Usar URL manual</button>
+        </div>
+
+        <iframe id="previewFrame" title="Sandbox Preview"></iframe>
+      </section>
+    </main>
+
+    <script src="/web/app.js"></script>
+  </body>
+</html>
